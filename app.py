@@ -1,4 +1,4 @@
-import os, base64, shutil
+import os, base64, shutil, gc
 import glob
 import io
 import dash
@@ -22,11 +22,15 @@ from efficientnet_pytorch import EfficientNet
 
 # pip install efficientnet_pytorch
 
-app = dash.Dash(__name__)
+app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
 # INTERFACE ---------------------------------------
 app.layout = dbc.Container(children=[
     html.Br(),
-    html.H1(children="baby and adult K9/FL9"),
+    html.H2(children="Dog/Cat classification"),
+    html.Br(),
+    html.Div(children="月並みですが。"),
+    html.Div(children="連続投入時は更新挟んだほうがいいです。"),
+    html.Div([html.A("source", href="https://github.com/Tsuchiya-Ryo/K9-and-FL1")]),
     html.Br(),
     
     dcc.Upload(
@@ -35,8 +39,8 @@ app.layout = dbc.Container(children=[
             html.A("Upload jpg/jpeg/png file")
         ),
         style = {
-                    'width': '40%',
-                    'height': '30px',
+                    'width': '60%',
+                    'height': '40px',
                     'lineHeight': '30px',
                     'borderWidth': '1px',
                     'borderStyle': 'solid',
@@ -45,11 +49,13 @@ app.layout = dbc.Container(children=[
                     'margin': '30px',
                     "backgroundcolor":"blue"
             },
-        multiple=True
+        multiple=True,
+        max_size=100000000
     ),
-    html.Div(id="selected-img"),
+    
     html.Br(),
     html.Div([dcc.Graph(id="example-graph")]),
+    html.Div(id="selected-img"),
 ])
 
 
@@ -65,39 +71,45 @@ def update_graph(images, filename):
     if not os.path.isdir("./assets"):
         os.mkdir("./assets")
 
-    # for i, image_str in enumerate(images):
-    #     image = image_str.split(',')[1]
-    #     # data = decodebytes(base64.b64decode(image))
-    #     data = decodebytes(image.encode('ascii'))
-    #     with open("./assets/image_{}.png".format(i+1), "wb") as f:
-    #         f.write(data)
-
     for name, image_str in zip(filename, images):
         image = image_str.split(",")[1]
         data = decodebytes(image.encode("ascii"))
-        with open("./assets/{}.png".format(name.split(".")[0]), "wb") as f:
+        # with open("./assets/{}.png".format(name.split(".")[0]), "wb") as f:
+        with open("./assets/{}.png".format(name), "wb") as f:
             f.write(data)
+        del image
+        del data
 
-    print(filename)
     img_target_path = "./assets/*.png"
     img_url_list = []
     for path in glob.glob(img_target_path):
         img_url_list.append(path)
     img_list =[]
-    print(img_url_list)
+
     for url in img_url_list:
         img = Image.open(url)
         if len(np.array(img).shape) != 3:
             img = transforms.Grayscale(num_output_channels=3)(img)
+
+        if np.array(img).shape[2] != 3:
+            img = img.convert("RGB")
+
         img = tfms(img).unsqueeze(0)
         img_list.append(img)
+        del img
     img_batch = torch.cat(img_list, axis=0)
-    print(img_batch.size())
+
+    del img_list
 
     net.eval()
     with torch.no_grad():
         outputs = net(img_batch)
     datapoints = np.array(torch.abs(nn.Sigmoid()(outputs)-1))
+
+    del img_batch
+    del outputs
+
+    gc.collect()
 
     return {"data":[go.Scatter(
         x = datapoints[:,0],
@@ -110,10 +122,10 @@ def update_graph(images, filename):
         }
     )],
     "layout":go.Layout(
-        xaxis={"title": "Cat(0) <-------------------> Dog(1)",
-                "range":[0,1]},
-        yaxis={"title": "Young(0) <------------------> Adult(1)",
-                "range":[0,1]}
+        xaxis={"title": "Cat (0) <------------------> Dog (1)",
+                "range":[0,1],},
+        yaxis={"title": "Young (0) <------------------> Adult (1)",
+                "range":[0,1],},
     ),
     }
 
@@ -136,7 +148,7 @@ if __name__ == "__main__":
         "efficient1204.pth", map_location = torch.device("cpu")))
     net.eval()
 
-    tfms = transforms.Compose([transforms.Resize(224), transforms.CenterCrop(224),
+    tfms = transforms.Compose([transforms.Resize([224,224]), transforms.CenterCrop([224,224]),
             transforms.ToTensor(), transforms.Normalize([0.485,0.456,0.406],[0.229,0.224,0.225])])
 
-    app.run_server(host="0.0.0.0") 
+    app.run_server(host="0.0.0.0")
