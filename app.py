@@ -46,7 +46,7 @@ app.layout = dbc.Container(children=[
                     'borderStyle': 'solid',
                     'borderRadius': '9px',
                     'textAlign': 'center',
-                    'margin': '30px',
+                    'margin': '0px',
                     "backgroundcolor":"blue"
             },
         multiple=True,
@@ -55,9 +55,8 @@ app.layout = dbc.Container(children=[
     
     html.Br(),
     html.Div([dcc.Graph(id="example-graph")]),
-    html.Div(id="selected-img"),
+    html.Div(id="selected-img", style={"padding-bottom":"500px"}),
 ])
-
 
 @app.callback(
     Output("example-graph", "figure"),
@@ -74,11 +73,11 @@ def update_graph(images, filename):
     for name, image_str in zip(filename, images):
         image = image_str.split(",")[1]
         data = decodebytes(image.encode("ascii"))
-        # with open("./assets/{}.png".format(name.split(".")[0]), "wb") as f:
         with open("./assets/{}.png".format(name), "wb") as f:
             f.write(data)
-        del image
-        del data
+        del image, image_str, name, f, data
+    images = None
+    del images
 
     img_target_path = "./assets/*.png"
     img_url_list = []
@@ -96,7 +95,8 @@ def update_graph(images, filename):
 
         img = tfms(img).unsqueeze(0)
         img_list.append(img)
-        del img
+        del url, img
+
     img_batch = torch.cat(img_list, axis=0)
 
     del img_list
@@ -106,8 +106,7 @@ def update_graph(images, filename):
         outputs = net(img_batch)
     datapoints = np.array(torch.abs(nn.Sigmoid()(outputs)-1))
 
-    del img_batch
-    del outputs
+    del img_batch, outputs
 
     gc.collect()
 
@@ -136,7 +135,11 @@ def update_graph(images, filename):
 )
 def update_img(hoverData):
     try:
+        imgurl = None
+        del imgurl
         imgurl = hoverData["points"][0]["text"] + ".png"
+        del hoverData
+        gc.collect()
         return html.Img(src= app.get_asset_url(imgurl))
     except:
         return "hover_some_plots"
